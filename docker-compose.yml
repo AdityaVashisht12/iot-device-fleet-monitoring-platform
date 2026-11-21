@@ -1,0 +1,340 @@
+name: iot-telemetry
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mosquitto:
+    image: ${MOSQUITTO_IMAGE:-eclipse-mosquitto:2.0.21}
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    logging: *default-logging
+
+  kafka:
+    image: ${KAFKA_IMAGE:-apache/kafka:3.9.1}
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:${KAFKA_EXTERNAL_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-9092}:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    logging: *default-logging
+
+  kafka-init:
+    image: ${KAFKA_IMAGE:-apache/kafka:3.9.1}
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
+    command:
+      - --bootstrap-server
+      - kafka:9092
+      - --create
+      - --if-not-exists
+      - --topic
+      - ${KAFKA_TELEMETRY_TOPIC:-iot-telemetry}
+      - --partitions
+      - ${KAFKA_TOPIC_PARTITIONS:-3}
+      - --replication-factor
+      - "1"
+    environment:
+      KAFKA_TELEMETRY_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-iot-telemetry}
+      KAFKA_TOPIC_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-3}
+    networks: [iot]
+    logging: *default-logging
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iot_telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-iot_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-change-me-local}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER:-airflow}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-change-me-local}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-iot-schema.sql:ro
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+
+  postgres-bootstrap:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-iot_telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-iot_app}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-change-me-local}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER:-airflow}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-change-me-local}
+    volumes:
+      - ./postgres/init/bootstrap.sh:/bootstrap/bootstrap.sh:ro
+      - ./postgres/init/02-grafana-reader.sql:/bootstrap/02-grafana-reader.sql:ro
+      - ./postgres/init/03-airflow-role.sql:/bootstrap/03-airflow-role.sql:ro
+    entrypoint: ["/bin/sh", "/bootstrap/bootstrap.sh"]
+    networks: [iot]
+    logging: *default-logging
+
+  airflow-init:
+    image: ${AIRFLOW_IMAGE:-local/iot-airflow:2.11.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    restart: "no"
+    depends_on:
+      postgres-bootstrap:
+        condition: service_completed_successfully
+    environment: &airflow-environment
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-dev-only-change-this-airflow-secret-key}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-change-me-local}@postgres:5432/${POSTGRES_DB:-iot_telemetry}
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session
+      AIRFLOW_CONN_IOT_POSTGRES: postgresql://${POSTGRES_USER:-iot_app}:${POSTGRES_PASSWORD:-change-me-local}@postgres:5432/${POSTGRES_DB:-iot_telemetry}
+      AIRFLOW_ALERT_EMAIL: ${AIRFLOW_ALERT_EMAIL:-}
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-change-me-local}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER:-airflow}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-change-me-local}
+      POSTGRES_DB: ${POSTGRES_DB:-iot_telemetry}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - airflow-logs:/opt/airflow/logs
+    command: >-
+      bash -ec 'airflow db migrate &&
+      (airflow users create --username "$${_AIRFLOW_WWW_USER_USERNAME}" --password "$${_AIRFLOW_WWW_USER_PASSWORD}" --firstname IoT --lastname Admin --role Admin --email admin@example.local || true)'
+    networks: [iot]
+    logging: *default-logging
+
+  airflow-scheduler:
+    image: ${AIRFLOW_IMAGE:-local/iot-airflow:2.11.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment: *airflow-environment
+    command: scheduler
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - airflow-logs:/opt/airflow/logs
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+
+  airflow-webserver:
+    image: ${AIRFLOW_IMAGE:-local/iot-airflow:2.11.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-scheduler:
+        condition: service_healthy
+    environment: *airflow-environment
+    command: webserver
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - airflow-logs:/opt/airflow/logs
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IOT_APP_IMAGE:-iot-telemetry-app:local}
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      mqtt-kafka-ingestor:
+        condition: service_started
+    command: ["python", "-m", "iot_telemetry.simulator"]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      SIMULATOR_DEVICE_COUNT: ${SIMULATOR_DEVICE_COUNT:-500}
+      SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-2}
+      SIMULATOR_SPEED_MULTIPLIER: ${SIMULATOR_SPEED_MULTIPLIER:-1}
+      SIMULATOR_ABNORMAL_PROBABILITY: ${SIMULATOR_ABNORMAL_PROBABILITY:-0.01}
+      SIMULATOR_FAILURE_PROBABILITY: ${SIMULATOR_FAILURE_PROBABILITY:-0.0005}
+      SIMULATOR_MIN_FAILURE_TICKS: ${SIMULATOR_MIN_FAILURE_TICKS:-3}
+      SIMULATOR_MAX_FAILURE_TICKS: ${SIMULATOR_MAX_FAILURE_TICKS:-15}
+      SIMULATOR_MQTT_QOS: ${SIMULATOR_MQTT_QOS:-1}
+      SIMULATOR_RANDOM_SEED: ${SIMULATOR_RANDOM_SEED:-}
+    networks: [iot]
+    logging: *default-logging
+
+  mqtt-kafka-ingestor:
+    image: ${IOT_APP_IMAGE:-iot-telemetry-app:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    command: ["python", "-m", "iot_telemetry.mqtt.runner"]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_INGEST_CLIENT_ID: ${MQTT_INGEST_CLIENT_ID:-iot-telemetry-ingestor}
+      MQTT_KEEPALIVE: ${MQTT_KEEPALIVE:-60}
+      MQTT_INGEST_TOPIC: ${MQTT_INGEST_TOPIC:-iot/devices/+/telemetry}
+      MQTT_INGEST_QOS: ${MQTT_INGEST_QOS:-1}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TELEMETRY_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-iot-telemetry}
+      KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-iot-mqtt-kafka-bridge}
+      KAFKA_DELIVERY_TIMEOUT_SECONDS: ${KAFKA_DELIVERY_TIMEOUT_SECONDS:-10}
+      KAFKA_MAX_RETRIES: ${KAFKA_MAX_RETRIES:-3}
+      KAFKA_RETRY_BACKOFF_SECONDS: ${KAFKA_RETRY_BACKOFF_SECONDS:-1}
+    networks: [iot]
+    logging: *default-logging
+
+  kafka-postgres-consumer:
+    image: ${IOT_APP_IMAGE:-iot-telemetry-app:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres-bootstrap:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    command: ["python", "-m", "iot_telemetry.kafka.consumer_runner"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TELEMETRY_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-iot-telemetry}
+      KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-iot-telemetry-postgres}
+      KAFKA_CONSUMER_CLIENT_ID: ${KAFKA_CONSUMER_CLIENT_ID:-iot-telemetry-consumer}
+      KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-earliest}
+      KAFKA_POLL_TIMEOUT_SECONDS: ${KAFKA_POLL_TIMEOUT_SECONDS:-1}
+      ANOMALY_MODEL_PATH: models/telemetry_isolation_forest.joblib
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-iot_telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-iot_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+    networks: [iot]
+    logging: *default-logging
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.3.0}
+    restart: unless-stopped
+    depends_on:
+      postgres-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-change-me-local}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-change-me-local}
+      POSTGRES_DB: ${POSTGRES_DB:-iot_telemetry}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [iot]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+networks:
+  iot:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
+  kafka-data:
+  postgres-data:
+  grafana-data:
+  airflow-logs:

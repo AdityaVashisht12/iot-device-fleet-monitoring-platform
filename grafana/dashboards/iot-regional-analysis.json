@@ -1,0 +1,910 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Compare regional health, uptime, utilization, latency, and anomalies.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT d.region)::double precision AS value FROM devices d WHERE TRUE AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Regions Reporting",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT AVG(p.device_health_score) AS value FROM processed_telemetry p JOIN devices d USING (device_id) WHERE p.event_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours' AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Regional Health",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT AVG(u.uptime_pct) AS value FROM v_device_uptime_24h u JOIN devices d USING (device_id) WHERE TRUE AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Uptime · 24h",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*)::double precision AS value FROM device_alerts a JOIN devices d USING (device_id) WHERE a.alert_type IN ('telemetry_gap', 'health_critical') AND a.alert_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours' AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Operational Incidents · 24h",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "barWidth": 0.85,
+        "groupWidth": 0.72,
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": {
+          "group": "A",
+          "mode": "none"
+        },
+        "tooltip": {
+          "mode": "single"
+        },
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT d.region, AVG(p.device_health_score) AS \"Health score\" FROM processed_telemetry p JOIN devices d USING (device_id) WHERE p.event_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours' AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY d.region ORDER BY 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Regional Health Score",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "barWidth": 0.85,
+        "groupWidth": 0.72,
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": {
+          "group": "A",
+          "mode": "none"
+        },
+        "tooltip": {
+          "mode": "single"
+        },
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT d.region, AVG(u.uptime_pct) AS \"Uptime %\" FROM v_device_uptime_24h u JOIN devices d USING (device_id) WHERE TRUE AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY d.region ORDER BY 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Regional Uptime",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 14,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(p.event_timestamp, '15m'), d.region AS metric, AVG(p.cpu_usage_pct) AS \"CPU %\" FROM processed_telemetry p JOIN devices d USING (device_id) WHERE $__timeFilter(p.event_timestamp) AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY 1, d.region ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Utilization by Region",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "ms",
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 14,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(p.event_timestamp, '15m'), d.region AS metric, AVG(p.network_latency_ms) AS \"Latency ms\" FROM processed_telemetry p JOIN devices d USING (device_id) WHERE $__timeFilter(p.event_timestamp) AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY 1, d.region ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Network Latency by Region",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 9,
+      "options": {
+        "barWidth": 0.85,
+        "groupWidth": 0.72,
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": {
+          "group": "A",
+          "mode": "none"
+        },
+        "tooltip": {
+          "mode": "single"
+        },
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT d.region, COUNT(*) FILTER (WHERE p.is_anomaly) AS anomaly_count FROM processed_telemetry p JOIN devices d USING (device_id) WHERE p.event_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours' AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY d.region ORDER BY 2 DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Regional Anomaly Counts",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "iot-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "iot-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT d.region, COUNT(DISTINCT d.device_id) AS devices, COUNT(p.event_id) AS telemetry_events, AVG(p.device_health_score) AS avg_health_score, AVG(p.cpu_usage_pct) AS avg_cpu_pct, AVG(p.network_latency_ms) AS avg_latency_ms, COUNT(*) FILTER (WHERE p.is_anomaly) AS anomalies FROM devices d LEFT JOIN processed_telemetry p ON p.device_id = d.device_id AND p.event_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours' WHERE TRUE AND (${region:sqlstring} = 'All' OR d.region = ${region:sqlstring}) AND (${device_id:sqlstring} = 'All' OR d.device_id = ${device_id:sqlstring}) GROUP BY d.region ORDER BY avg_health_score DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Regional Performance Summary",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "iot",
+    "telemetry",
+    "provisioned"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "iot-postgres"
+        },
+        "definition": "SELECT 'All' AS \"__text\", 'All' AS \"__value\" UNION SELECT DISTINCT region AS \"__text\", region AS \"__value\" FROM devices ORDER BY 1",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Region",
+        "multi": false,
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "name": "region",
+        "query": "SELECT 'All' AS \"__text\", 'All' AS \"__value\" UNION SELECT DISTINCT region AS \"__text\", region AS \"__value\" FROM devices ORDER BY 1"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "iot-postgres"
+        },
+        "definition": "SELECT 'All' AS \"__text\", 'All' AS \"__value\" UNION SELECT DISTINCT device_id AS \"__text\", device_id AS \"__value\" FROM devices WHERE (${region:sqlstring} = 'All' OR region = ${region:sqlstring}) ORDER BY 1",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Device ID",
+        "multi": false,
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "name": "device_id",
+        "query": "SELECT 'All' AS \"__text\", 'All' AS \"__value\" UNION SELECT DISTINCT device_id AS \"__text\", device_id AS \"__value\" FROM devices WHERE (${region:sqlstring} = 'All' OR region = ${region:sqlstring}) ORDER BY 1"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "1h"
+    ],
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "7d",
+      "30d"
+    ]
+  },
+  "timezone": "utc",
+  "title": "Regional Analysis",
+  "uid": "iot-regional-analysis",
+  "version": 1,
+  "weekStart": "monday"
+}

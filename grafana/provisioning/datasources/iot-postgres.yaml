@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  - name: IoT PostgreSQL
+    uid: iot-postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: $__env{GRAFANA_DB_USER}
+    secureJsonData:
+      password: $__env{GRAFANA_DB_PASSWORD}
+    jsonData:
+      database: $__env{POSTGRES_DB}
+      schema: public
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+      maxOpenConns: 20
+      maxIdleConns: 5
+      maxIdleConnsAuto: true
+      connMaxLifetime: 14400
+      timeInterval: 10s
+    editable: false

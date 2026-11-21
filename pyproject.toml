@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iot-device-telemetry"
+version = "0.1.0"
+description = "An end-to-end IoT device telemetry pipeline reference project."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "paho-mqtt>=2.1,<3",
+    "confluent-kafka>=2.5,<3",
+    "psycopg[binary]>=3.2,<4",
+    "scikit-learn>=1.5,<2",
+]
+
+[project.scripts]
+iot-telemetry-simulator = "iot_telemetry.simulator.runner:main"
+iot-telemetry-ingestor = "iot_telemetry.mqtt.runner:main"
+iot-telemetry-consumer = "iot_telemetry.kafka.consumer_runner:main"
+iot-telemetry-train-anomaly = "iot_telemetry.processing.train_anomaly_model:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
